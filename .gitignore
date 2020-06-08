@@ -1,0 +1,4 @@
+config.json
+config.h
+._*
+node_modules
