@@ -3,6 +3,8 @@
 #include <WiFiNINA.h>
 #include <SPI.h>
 #include "config.h"
+#include <LiquidCrystal_I2C.h>
+
 
 // DEFINEs from the TCMux shield demo by Ocean Controls
 #define PINEN 7 //Mux Enable pin
@@ -19,22 +21,33 @@
 
 char ssid[]=WIFI_SSID;
 char password[]=WIFI_PASSWORD;
-
+//char tickers[]="-\|/-\|/";
 
 float temperature[8];
 char status[8];
 unsigned long time;
 char probe_index=0;
 WiFiServer server(80);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
 
 void setup() {
-  // put your setup code here, to run once:
+
+	// Set up the serial port and the display
 	Serial.begin(9600);
+	lcd.init();
+	lcd.backlight();
+	lcd.setCursor(0,0);
+	lcd.print("OPL *");
+
 	setup_probes();
 	setup_server();
 }
 
 void loop() {
+
+	static char status_text[20];
+	static boolean ticker=false;
 
 	// Run the following code every 125ms so we get a full probe refresh every 1s.  Should be relatively overflow-safe, though we may get a short cycle (<125ms) at overflow time.
 	unsigned long diff=millis()-time;
@@ -48,7 +61,23 @@ void loop() {
 
 		// Increment
 		probe_index++;
-		if(probe_index >7) probe_index=0;
+		if(probe_index >7) {
+			probe_index=0;
+
+			// These things happen once per second
+			lcd.setCursor(0,0);
+			sprintf(status_text, "OPL %c %ddBm",(ticker?'*':' '), WiFi.RSSI());
+			lcd.print(status_text);
+
+			ticker = !ticker;
+		}
+
+		// Update the banner
+//		lcd.setCursor(1,0);
+//		lcd.print(tickers[probe_index]);
+//		lcd.setCursor(18,0);
+//		lcd.print(tickers[probe_index]);
+	
 	}
 
 	serve_requests();
@@ -57,18 +86,57 @@ void loop() {
 
 }
 
+void log(char* fmt, ...) {
+
+	// Use vsprintf to complile the string
+	static char str[100];
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(str, 100, fmt, args);		// snprintf is like sprintf, but with a max limit on length to avoid buffer overflow
+	va_end(args);
+
+
+	/* * Oregon Pit Lab * */
+	/* Line 1             */
+	/* Line 2             */
+	/* Line 3             */
+
+	// Previous lines.  Previous line 1 is always lost.
+	static char previous_line3[]="                    ";
+	static char previous_line2[]="                    ";
+
+	// A 20 character version of str
+	char line3[]="                    ";
+
+	char len=strlen(str);
+	if(len>20) len=20;
+	memcpy(line3, str, len);	// Intentionally not copying terminating nul
+	
+	lcd.setCursor(0,1);
+	lcd.print(previous_line2);
+	lcd.setCursor(0,2);
+	lcd.print(previous_line3);
+	lcd.setCursor(0,3);
+	lcd.print(line3);
+
+	// Save the current lines 2 and 3 as previous lines 2 and 3
+	memcpy(previous_line2, previous_line3, 20);
+	memcpy(previous_line3, line3, 20);
+	
+	Serial.println(str);
+}
+
+
 void setup_server() {
 
 	if(WiFi.status() == WL_NO_MODULE) {
 
-		Serial.println("No wifi module detected");
+		log("No wifi module detected");
 	}
 
 	// Connect to wifi
 	int status=0;
-	Serial.print("Connecting to wifi '");
-	Serial.print(ssid);
-	Serial.print("'...");
+	log("Connecting '%s'", ssid);
 	status=WiFi.begin(ssid, password);
 
 	// Check status every 100ms until connected
@@ -82,15 +150,14 @@ void setup_server() {
 		}
 		
 	} while(status != WL_CONNECTED);
-	Serial.println("connected");
+
+	log("connected");
 
 	// Print out wifi details
-	Serial.print("IP Address: ");
-	Serial.println(WiFi.localIP());
-	Serial.print("RSSI: ");
-	Serial.print(WiFi.RSSI());
-	Serial.println("dBm");
-
+	int32_t ip_address=WiFi.localIP();
+	uint8_t* address=(uint8_t*)&ip_address;
+	log("IP %d.%d.%d.%d",address[0],address[1],address[2],address[3]); 	
+	log("RSSI %d dBm", WiFi.RSSI());
 
 	// Start the server
 	server.begin();
@@ -103,6 +170,9 @@ void setup_server() {
  * Parts of this have been copied from the WiFi server example by dlf and Tom Igoe
  */
 void serve_requests() {
+
+IPAddress l;
+
 
 	char n;
 
