@@ -21,6 +21,7 @@
 
 char ssid[]=WIFI_SSID;
 char password[]=WIFI_PASSWORD;
+#define VERSION "1.0.0"
 //char tickers[]="-\|/-\|/";
 
 float temperature[8];
@@ -39,6 +40,9 @@ void setup() {
 	lcd.backlight();
 	lcd.setCursor(0,0);
 	lcd.print("OPL *");
+	log("Oregon Pit Lab");
+	log("Octo logger v %s",VERSION);
+
 
 	setup_probes();
 	setup_server();
@@ -151,13 +155,13 @@ void setup_server() {
 		
 	} while(status != WL_CONNECTED);
 
-	log("connected");
+	log("%s connected", ssid);
 
 	// Print out wifi details
 	int32_t ip_address=WiFi.localIP();
 	uint8_t* address=(uint8_t*)&ip_address;
 	log("IP %d.%d.%d.%d",address[0],address[1],address[2],address[3]); 	
-	log("RSSI %d dBm", WiFi.RSSI());
+	//log("RSSI %d dBm", WiFi.RSSI());
 
 	// Start the server
 	server.begin();
